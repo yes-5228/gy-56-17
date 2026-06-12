@@ -38,6 +38,7 @@
         :bookings="bookings"
         :notices="notices"
         @booking-created="handleBookingCreated"
+        @data-changed="loadData"
       />
     </main>
   </div>

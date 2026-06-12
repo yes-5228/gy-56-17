@@ -31,14 +31,27 @@ class TravelerViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(booking_id=booking_id)
         return queryset
 
+    def _validate_capacity(self, booking_id, exclude_traveler_id=None):
+        booking = Booking.objects.filter(id=booking_id).first()
+        if not booking:
+            return
+        traveler_count = booking.travelers.count()
+        if exclude_traveler_id:
+            traveler_count -= 1
+        if traveler_count >= booking.party_size:
+            raise ValidationError(
+                {"detail": f"游客人数已达报名人数上限（{booking.party_size}人），无法继续添加"}
+            )
+
     def create(self, request, *args, **kwargs):
         booking_id = request.data.get("booking")
         if booking_id:
-            booking = Booking.objects.filter(id=booking_id).first()
-            if booking:
-                traveler_count = booking.travelers.count()
-                if traveler_count >= booking.party_size:
-                    raise ValidationError(
-                        {"detail": f"游客人数已达报名人数上限（{booking.party_size}人），无法继续添加"}
-                    )
+            self._validate_capacity(booking_id)
         return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        new_booking_id = request.data.get("booking")
+        if new_booking_id and int(new_booking_id) != instance.booking_id:
+            self._validate_capacity(new_booking_id)
+        return super().update(request, *args, **kwargs)

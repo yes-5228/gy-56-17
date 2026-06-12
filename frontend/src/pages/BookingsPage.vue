@@ -129,8 +129,16 @@
                   </div>
                 </div>
                 <div class="traveler-actions">
-                  <button type="button" class="link-button" @click.stop="startEditTraveler(booking, traveler)">编辑</button>
-                  <button type="button" class="link-button danger" @click.stop="confirmDeleteTraveler(booking.id, traveler.id)">删除</button>
+                  <button type="button" class="link-button" @click.stop="startEditTraveler(booking, traveler)" :disabled="deletingTravelerId === traveler.id">编辑</button>
+                  <button
+                    type="button"
+                    class="link-button danger"
+                    :class="{ disabled: deletingTravelerId === traveler.id }"
+                    :disabled="deletingTravelerId === traveler.id"
+                    @click.stop="confirmDeleteTraveler(booking.id, traveler.id)"
+                  >
+                    {{ deletingTravelerId === traveler.id ? '删除中...' : '删除' }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -171,6 +179,7 @@ const addingBookingId = ref(null);
 const editingTravelerId = ref(null);
 const submittingBooking = ref(false);
 const submittingTraveler = ref(false);
+const deletingTravelerId = ref(null);
 
 const travelerForm = reactive({
   name: "",
@@ -242,17 +251,25 @@ function cancelTravelerForm() {
 }
 
 function extractErrorMessage(err, fallback) {
-  try {
-    const parsed = JSON.parse(err.message);
-    if (parsed && parsed.detail) return parsed.detail;
-    if (parsed && typeof parsed === "object") {
-      const msgs = Object.values(parsed).flat();
-      if (msgs.length) return msgs.join("；");
-    }
-  } catch (_) {
-    // 不是 JSON，直接用 message
+  const body = err.body;
+  if (body && typeof body === "object") {
+    if (body.detail) return body.detail;
+    const msgs = Object.values(body).flat().filter(Boolean);
+    if (msgs.length) return msgs.join("；");
   }
-  return err.message || fallback;
+  if (typeof err.message === "string") {
+    try {
+      const parsed = JSON.parse(err.message);
+      if (parsed && parsed.detail) return parsed.detail;
+      if (parsed && typeof parsed === "object") {
+        const msgs = Object.values(parsed).flat().filter(Boolean);
+        if (msgs.length) return msgs.join("；");
+      }
+    } catch (_) {
+      if (err.message && !err.message.startsWith("{")) return err.message;
+    }
+  }
+  return fallback || "操作失败，请稍后重试";
 }
 
 async function submitTraveler(bookingId) {
@@ -305,6 +322,7 @@ async function submitTraveler(bookingId) {
 async function confirmDeleteTraveler(bookingId, travelerId) {
   if (!confirm("确定要删除该游客信息吗？")) return;
 
+  deletingTravelerId.value = travelerId;
   try {
     await travelApi.deleteTraveler(travelerId);
     const booking = findBookingById(bookingId);
@@ -315,7 +333,9 @@ async function confirmDeleteTraveler(bookingId, travelerId) {
       }
     }
   } catch (err) {
-    alert(`删除失败：${err.message}`);
+    alert(`删除失败：${extractErrorMessage(err, "请稍后重试")}`);
+  } finally {
+    deletingTravelerId.value = null;
   }
 }
 

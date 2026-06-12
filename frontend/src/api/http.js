@@ -1,5 +1,13 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
+class ApiError extends Error {
+  constructor(status, body) {
+    super(typeof body === "string" ? body : JSON.stringify(body));
+    this.status = status;
+    this.body = body;
+  }
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -10,8 +18,13 @@ async function request(path, options = {}) {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `HTTP ${response.status}`);
+    let body;
+    try {
+      body = await response.json();
+    } catch (_) {
+      body = await response.text();
+    }
+    throw new ApiError(response.status, body);
   }
 
   if (response.status === 204) {

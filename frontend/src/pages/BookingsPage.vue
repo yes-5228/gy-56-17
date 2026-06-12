@@ -59,9 +59,16 @@
 
           <div v-if="expandedBooking === booking.id" class="traveler-section">
             <div class="traveler-head">
-              <h5>游客名单（{{ booking.travelers ? booking.travelers.length : 0 }}/{{ booking.party_size }}）</h5>
-              <button v-if="!isAddingTraveler(booking.id)" type="button" class="link-button" @click.stop="startAddTraveler(booking)">
-                + 添加游客
+              <h5>游客名单（{{ getTravelerCount(booking) }}/{{ booking.party_size }}）</h5>
+              <button
+                v-if="!isAddingTraveler(booking.id)"
+                type="button"
+                class="link-button"
+                :class="{ disabled: isTravelerFull(booking) }"
+                :disabled="isTravelerFull(booking)"
+                @click.stop="startAddTraveler(booking)"
+              >
+                {{ isTravelerFull(booking) ? '人数已满' : '+ 添加游客' }}
               </button>
             </div>
 
@@ -169,6 +176,25 @@ const travelerForm = reactive({
   special_requirements: "",
 });
 
+function getTravelerCount(booking) {
+  return booking.travelers ? booking.travelers.length : 0;
+}
+
+function isTravelerFull(booking) {
+  return getTravelerCount(booking) >= booking.party_size;
+}
+
+function findBookingById(bookingId) {
+  return props.bookings.find((b) => b.id === bookingId);
+}
+
+function ensureTravelersArray(booking) {
+  if (!booking.travelers) {
+    booking.travelers = [];
+  }
+  return booking.travelers;
+}
+
 function toggleExpand(bookingId) {
   expandedBooking.value = expandedBooking.value === bookingId ? null : bookingId;
 }
@@ -178,6 +204,10 @@ function isAddingTraveler(bookingId) {
 }
 
 function startAddTraveler(booking) {
+  if (isTravelerFull(booking)) {
+    alert("游客人数已达报名人数上限，无法继续添加");
+    return;
+  }
   addingBookingId.value = booking.id;
   editingTravelerId.value = null;
   resetTravelerForm();
@@ -213,6 +243,12 @@ async function submitTraveler(bookingId) {
     return;
   }
 
+  const booking = findBookingById(bookingId);
+  if (!editingTravelerId.value && booking && isTravelerFull(booking)) {
+    alert("游客人数已达报名人数上限，无法继续添加");
+    return;
+  }
+
   const payload = {
     booking: bookingId,
     name: travelerForm.name,
@@ -224,12 +260,22 @@ async function submitTraveler(bookingId) {
 
   try {
     if (editingTravelerId.value) {
-      await travelApi.updateTraveler(editingTravelerId.value, payload);
+      const updated = await travelApi.updateTraveler(editingTravelerId.value, payload);
+      if (booking) {
+        const travelers = ensureTravelersArray(booking);
+        const idx = travelers.findIndex((t) => t.id === editingTravelerId.value);
+        if (idx !== -1) {
+          travelers.splice(idx, 1, updated);
+        }
+      }
     } else {
-      await travelApi.createTraveler(payload);
+      const created = await travelApi.createTraveler(payload);
+      if (booking) {
+        const travelers = ensureTravelersArray(booking);
+        travelers.push(created);
+      }
     }
     cancelTravelerForm();
-    emit("data-changed");
   } catch (err) {
     alert(`操作失败：${err.message}`);
   }
@@ -240,7 +286,13 @@ async function confirmDeleteTraveler(bookingId, travelerId) {
 
   try {
     await travelApi.deleteTraveler(travelerId);
-    emit("data-changed");
+    const booking = findBookingById(bookingId);
+    if (booking && booking.travelers) {
+      const idx = booking.travelers.findIndex((t) => t.id === travelerId);
+      if (idx !== -1) {
+        booking.travelers.splice(idx, 1);
+      }
+    }
   } catch (err) {
     alert(`删除失败：${err.message}`);
   }
@@ -248,10 +300,12 @@ async function confirmDeleteTraveler(bookingId, travelerId) {
 
 function submit() {
   emit("booking-created", { ...form });
+  form.route = "";
   form.contact_name = "";
   form.phone = "";
   form.party_size = 1;
   form.travel_date = "";
+  form.status = "pending";
   form.remark = "";
 }
 </script>
@@ -312,6 +366,13 @@ function submit() {
 
 .link-button:hover {
   background: #e7f2ef;
+}
+
+.link-button.disabled,
+.link-button:disabled {
+  color: #9fb3c8;
+  cursor: not-allowed;
+  background: transparent;
 }
 
 .link-button.danger {

@@ -34,7 +34,9 @@
         备注
         <textarea v-model="form.remark" rows="3"></textarea>
       </label>
-      <button class="primary-action" type="submit">提交报名</button>
+      <button class="primary-action" type="submit" :disabled="submittingBooking">
+        {{ submittingBooking ? '提交中...' : '提交报名' }}
+      </button>
     </form>
 
     <section class="table-panel">
@@ -106,9 +108,9 @@
                 </label>
               </div>
               <div class="form-actions">
-                <button type="button" class="cancel-button" @click.stop="cancelTravelerForm">取消</button>
-                <button type="button" class="primary-action" @click.stop="submitTraveler(booking.id)">
-                  {{ editingTravelerId ? '保存修改' : '确认添加' }}
+                <button type="button" class="cancel-button" @click.stop="cancelTravelerForm" :disabled="submittingTraveler">取消</button>
+                <button type="button" class="primary-action" @click.stop="submitTraveler(booking.id)" :disabled="submittingTraveler">
+                  {{ submittingTraveler ? '处理中...' : (editingTravelerId ? '保存修改' : '确认添加') }}
                 </button>
               </div>
             </div>
@@ -152,7 +154,7 @@ const props = defineProps({
   bookings: { type: Array, required: true },
 });
 
-const emit = defineEmits(["booking-created", "data-changed"]);
+const emit = defineEmits(["data-changed"]);
 
 const form = reactive({
   route: "",
@@ -167,6 +169,8 @@ const form = reactive({
 const expandedBooking = ref(null);
 const addingBookingId = ref(null);
 const editingTravelerId = ref(null);
+const submittingBooking = ref(false);
+const submittingTraveler = ref(false);
 
 const travelerForm = reactive({
   name: "",
@@ -237,6 +241,20 @@ function cancelTravelerForm() {
   resetTravelerForm();
 }
 
+function extractErrorMessage(err, fallback) {
+  try {
+    const parsed = JSON.parse(err.message);
+    if (parsed && parsed.detail) return parsed.detail;
+    if (parsed && typeof parsed === "object") {
+      const msgs = Object.values(parsed).flat();
+      if (msgs.length) return msgs.join("；");
+    }
+  } catch (_) {
+    // 不是 JSON，直接用 message
+  }
+  return err.message || fallback;
+}
+
 async function submitTraveler(bookingId) {
   if (!travelerForm.name || !travelerForm.id_number) {
     alert("请填写姓名和证件号码");
@@ -258,6 +276,7 @@ async function submitTraveler(bookingId) {
     special_requirements: travelerForm.special_requirements || "",
   };
 
+  submittingTraveler.value = true;
   try {
     if (editingTravelerId.value) {
       const updated = await travelApi.updateTraveler(editingTravelerId.value, payload);
@@ -277,7 +296,9 @@ async function submitTraveler(bookingId) {
     }
     cancelTravelerForm();
   } catch (err) {
-    alert(`操作失败：${err.message}`);
+    alert(`操作失败：${extractErrorMessage(err, "请稍后重试")}`);
+  } finally {
+    submittingTraveler.value = false;
   }
 }
 
@@ -298,8 +319,7 @@ async function confirmDeleteTraveler(bookingId, travelerId) {
   }
 }
 
-function submit() {
-  emit("booking-created", { ...form });
+function resetBookingForm() {
   form.route = "";
   form.contact_name = "";
   form.phone = "";
@@ -307,6 +327,32 @@ function submit() {
   form.travel_date = "";
   form.status = "pending";
   form.remark = "";
+}
+
+async function submit() {
+  if (!form.route) {
+    alert("请选择线路");
+    return;
+  }
+  submittingBooking.value = true;
+  try {
+    const payload = {
+      route: form.route,
+      contact_name: form.contact_name,
+      phone: form.phone,
+      party_size: form.party_size,
+      travel_date: form.travel_date,
+      status: form.status,
+      remark: form.remark,
+    };
+    await travelApi.createBooking(payload);
+    resetBookingForm();
+    emit("data-changed");
+  } catch (err) {
+    alert(`报名创建失败：${extractErrorMessage(err, "请稍后重试")}`);
+  } finally {
+    submittingBooking.value = false;
+  }
 }
 </script>
 
@@ -417,6 +463,11 @@ function submit() {
 
 .cancel-button:hover {
   background: #f5f7fa;
+}
+
+.cancel-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .traveler-list {

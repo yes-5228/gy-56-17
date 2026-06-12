@@ -37,7 +37,6 @@
         :routes="routes"
         :bookings="bookings"
         :notices="notices"
-        @booking-created="handleBookingCreated"
         @data-changed="loadData"
       />
     </main>
@@ -96,11 +95,6 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
-}
-
-async function handleBookingCreated(payload) {
-  await travelApi.createBooking(payload);
-  await loadData();
 }
 
 onMounted(loadData);

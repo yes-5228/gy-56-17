@@ -127,6 +127,12 @@ main {
   font-weight: 700;
 }
 
+.primary-action:disabled {
+  background: #78909c;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
 .state {
   border-radius: 8px;
   background: #ffffff;

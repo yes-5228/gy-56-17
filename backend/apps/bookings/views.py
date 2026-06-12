@@ -54,4 +54,6 @@ class TravelerViewSet(viewsets.ModelViewSet):
         new_booking_id = request.data.get("booking")
         if new_booking_id and int(new_booking_id) != instance.booking_id:
             self._validate_capacity(new_booking_id)
+        elif new_booking_id and int(new_booking_id) == instance.booking_id:
+            self._validate_capacity(new_booking_id, exclude_traveler_id=instance.id)
         return super().update(request, *args, **kwargs)

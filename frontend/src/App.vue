@@ -35,9 +35,8 @@
         :is="activeComponent"
         :attractions="attractions"
         :routes="routes"
-        :bookings="bookings"
+        v-model:bookings="bookings"
         :notices="notices"
-        @data-changed="loadData"
       />
     </main>
   </div>

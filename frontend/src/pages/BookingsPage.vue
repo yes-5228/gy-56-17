@@ -5,6 +5,7 @@
         <p class="eyebrow">Registration</p>
         <h3>新增报名</h3>
       </div>
+      <div v-if="bookingFormError" class="inline-error">{{ bookingFormError }}</div>
       <label>
         选择线路
         <select v-model.number="form.route" required>
@@ -75,6 +76,7 @@
             </div>
 
             <div v-if="isAddingTraveler(booking.id)" class="traveler-form-card">
+              <div v-if="travelerFormError" class="inline-error">{{ travelerFormError }}</div>
               <div class="traveler-form">
                 <label>
                   姓名
@@ -162,7 +164,7 @@ const props = defineProps({
   bookings: { type: Array, required: true },
 });
 
-const emit = defineEmits(["data-changed"]);
+const emit = defineEmits(["update:bookings"]);
 
 const form = reactive({
   route: "",
@@ -180,6 +182,8 @@ const editingTravelerId = ref(null);
 const submittingBooking = ref(false);
 const submittingTraveler = ref(false);
 const deletingTravelerId = ref(null);
+const bookingFormError = ref("");
+const travelerFormError = ref("");
 
 const travelerForm = reactive({
   name: "",
@@ -217,8 +221,9 @@ function isAddingTraveler(bookingId) {
 }
 
 function startAddTraveler(booking) {
+  travelerFormError.value = "";
   if (isTravelerFull(booking)) {
-    alert("游客人数已达报名人数上限，无法继续添加");
+    travelerFormError.value = "游客人数已达报名人数上限，无法继续添加";
     return;
   }
   addingBookingId.value = booking.id;
@@ -227,6 +232,7 @@ function startAddTraveler(booking) {
 }
 
 function startEditTraveler(booking, traveler) {
+  travelerFormError.value = "";
   addingBookingId.value = booking.id;
   editingTravelerId.value = traveler.id;
   travelerForm.name = traveler.name;
@@ -247,6 +253,7 @@ function resetTravelerForm() {
 function cancelTravelerForm() {
   addingBookingId.value = null;
   editingTravelerId.value = null;
+  travelerFormError.value = "";
   resetTravelerForm();
 }
 
@@ -273,14 +280,15 @@ function extractErrorMessage(err, fallback) {
 }
 
 async function submitTraveler(bookingId) {
+  travelerFormError.value = "";
   if (!travelerForm.name || !travelerForm.id_number) {
-    alert("请填写姓名和证件号码");
+    travelerFormError.value = "请填写姓名和证件号码";
     return;
   }
 
   const booking = findBookingById(bookingId);
   if (!editingTravelerId.value && booking && isTravelerFull(booking)) {
-    alert("游客人数已达报名人数上限，无法继续添加");
+    travelerFormError.value = "游客人数已达报名人数上限，无法继续添加";
     return;
   }
 
@@ -313,7 +321,7 @@ async function submitTraveler(bookingId) {
     }
     cancelTravelerForm();
   } catch (err) {
-    alert(`操作失败：${extractErrorMessage(err, "请稍后重试")}`);
+    travelerFormError.value = extractErrorMessage(err, "请稍后重试");
   } finally {
     submittingTraveler.value = false;
   }
@@ -350,8 +358,9 @@ function resetBookingForm() {
 }
 
 async function submit() {
+  bookingFormError.value = "";
   if (!form.route) {
-    alert("请选择线路");
+    bookingFormError.value = "请选择线路";
     return;
   }
   submittingBooking.value = true;
@@ -365,11 +374,12 @@ async function submit() {
       status: form.status,
       remark: form.remark,
     };
-    await travelApi.createBooking(payload);
+    const created = await travelApi.createBooking(payload);
+    props.bookings.unshift(created);
+    expandedBooking.value = created.id;
     resetBookingForm();
-    emit("data-changed");
   } catch (err) {
-    alert(`报名创建失败：${extractErrorMessage(err, "请稍后重试")}`);
+    bookingFormError.value = extractErrorMessage(err, "请稍后重试");
   } finally {
     submittingBooking.value = false;
   }
@@ -399,6 +409,16 @@ async function submit() {
   color: #78909c;
   font-size: 12px;
   text-align: center;
+}
+
+.inline-error {
+  background: #fef2f2;
+  color: #b42318;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .traveler-section {
